@@ -1,0 +1,196 @@
+---
+title: "RECORD scoping review"
+author: "RECORD group"
+format: dashboard
+embed-resources: true
+---
+
+```{r}
+library(tidyverse)
+dat <- read.csv("extracted_data.csv")
+
+```
+
+## Row
+
+```{r}
+library(DT)
+library(reactable)
+library(plotly)
+library(htmltools)
+
+
+dat2 <- dat |>
+  mutate(across(everything(), factor)) |>
+  select(everything(), citation)
+
+names(dat2) <- LETTERS[1:length(dat2)]
+
+
+check_col <- function() {
+  colDef(
+    maxWidth = 60,
+    header = function(value) {
+      div(title = value, value)
+    },
+    headerStyle = list(
+      fontSize = "11px",
+      whiteSpace = "normal",
+      verticalAlign = "bottom"
+    ),
+    cell = function(value) {
+      # Render as an X mark or check mark
+      if (value == 0) {
+        " "
+      } else {
+        "\u2714\ufe0f"
+      }
+    }
+  )
+}
+
+study_col <- function() {
+  colDef(
+    header = function(value) {
+      div(title = value, value)
+    },
+
+    details = function(index) {
+      paste("Citation:", dat$citation[[index]])
+    }
+  )
+}
+
+# Helper to format column names (same logic as plot below)
+format_col_name <- function(x) {
+  str_replace_all(x, "_", " ") |>
+    str_to_title() |>
+    str_wrap(width = 20)
+}
+
+dat |>
+  select(-citation, -X, -paper_id) |>
+  rename_with(format_col_name) |>
+  reactable(
+    onClick = "expand",
+    highlight = TRUE,
+    compact = TRUE,
+    wrap = FALSE,
+    height = "auto",
+    searchable = TRUE,
+    columns = list(
+      `First Author` = study_col(),
+      `Bias` = check_col(),
+      `Code Classification` = check_col(),
+      `Distributed Network` = check_col(),
+      `Reporting` = check_col(),
+      `Linkage` = check_col(),
+      `Confounding` = check_col(),
+      `Pre Processing` = check_col(),
+      `Generalisability` = check_col(),
+      `Drug Exposures` = check_col(),
+      `Social Determinants` = check_col(),
+      `Others` = check_col(),
+      `Causal Inference` = check_col(),
+      `Stats Model` = check_col(),
+      `Data Quality` = check_col(),
+      `Harmonise Pts Data` = check_col()
+    )
+  )
+
+```
+
+## Row
+
+```{r}
+#| title: Number of studies reporting each issue
+gg_bars <- dat |>
+  select(
+    -X,
+    -paper_id,
+    -publication_year,
+    -citation,
+    -first_author,
+    -data_origin,
+    -data_origin,
+    -journal
+  ) |>
+  summarise(across(everything(), sum)) |>
+  pivot_longer(cols = everything()) |>
+  arrange(desc(value)) |>
+  mutate(
+    name = fct_inorder(name),
+    display_name = fct_inorder(
+      str_replace_all(as.character(name), "_", " ") |>
+        str_to_title() |>
+        str_wrap(width = 22)
+    ),
+    prop = value / nrow(dat)
+  ) |>
+  ggplot(aes(x = display_name, y = value)) +
+  geom_col() +
+  # scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    x = "Issue",
+    y = "Number of studies",
+    # title = "Number of studies reporting each issue"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(gg_bars)
+```
+
+```{r}
+#| title: Number of studies per data origin country
+gg_bars <- dat |>
+  count(data_origin) |>
+  mutate(data_origin = fct_reorder(data_origin, n, .desc = TRUE)) |>
+  ggplot(aes(x = data_origin, y = n)) +
+  geom_col() +
+  labs(
+    x = "Data origin country",
+    y = "Number of studies",
+    # title = "Number of studies per data origin country"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(face = "bold")
+  )
+
+ggplotly(gg_bars)
+
+```
+
+```{r}
+#| title: Number of studies per publication year
+year_breaks <- seq(
+  min(dat$publication_year, na.rm = TRUE),
+  max(dat$publication_year, na.rm = TRUE),
+  by = 1
+)
+
+gg_bars <- dat |>
+  count(publication_year) |>
+  ggplot(aes(x = publication_year, y = n)) +
+  geom_col() +
+  scale_x_continuous(breaks = year_breaks) +
+  labs(
+    x = "Publication year",
+    y = "Number of studies",
+    title = "(search was run up to 30 Jan 2023)"
+  ) +
+  theme_classic() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_text(face = "bold"),
+    plot.title = element_text(size = 8)
+  )
+
+ggplotly(gg_bars)
+
+```
